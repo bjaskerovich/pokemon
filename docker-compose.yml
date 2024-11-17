@@ -1,0 +1,63 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: pokemon_user
+      POSTGRES_PASSWORD: pokemon_pass
+      POSTGRES_DB: pokemon_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pokemon_user -d pokemon_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3001"
+    environment:
+      - DATABASE_URL=postgresql://pokemon_user:pokemon_pass@postgres:5432/pokemon_db
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=your_jwt_secret_key
+      - PORT=3001
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
